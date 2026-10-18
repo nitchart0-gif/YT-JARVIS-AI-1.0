@@ -150,6 +150,7 @@ export const api = {
     contentMode: string;
     durationSeconds: number;
     language: string;
+    allowOfflineDemo?: boolean;
     onRetry?: (info: { attempt: number; maxRetries: number; delayMs: number; reason: string; status?: number }) => void;
   }): Promise<ScriptGenerationResponse> {
     return safeFetchAIJson<ScriptGenerationResponse>(
@@ -165,6 +166,7 @@ export const api = {
           contentMode: params.contentMode,
           durationSeconds: params.durationSeconds,
           language: params.language,
+          allowOfflineDemo: params.allowOfflineDemo,
         }),
       },
       {
@@ -185,6 +187,7 @@ export const api = {
     durationSeconds: number;
     language: string;
     hookStyle?: string;
+    allowOfflineDemo?: boolean;
     onRetry?: (info: { attempt: number; maxRetries: number; delayMs: number; reason: string; status?: number }) => void;
   }): Promise<ScriptGenerationResponse> {
     return safeFetchAIJson<ScriptGenerationResponse>(
@@ -203,6 +206,7 @@ export const api = {
           durationSeconds: params.durationSeconds,
           language: params.language,
           hookStyle: params.hookStyle,
+          allowOfflineDemo: params.allowOfflineDemo,
         }),
       },
       {
@@ -398,6 +402,24 @@ export const api = {
       },
       body: JSON.stringify(params),
     });
+  },
+
+  async generateThumbnailImage(params: {
+    userId: string;
+    prompt: string;
+    aspectRatio?: '16:9' | '9:16' | '1:1';
+  }): Promise<{ success: boolean; imageUrl?: string; mimeType?: string; error?: string; isBillingRequired?: boolean }> {
+    return safeFetchAIJson<{ success: boolean; imageUrl?: string; mimeType?: string; error?: string; isBillingRequired?: boolean }>(
+      '/api/gemini/generate-image',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': params.userId,
+        },
+        body: JSON.stringify(params),
+      }
+    );
   },
 };
 

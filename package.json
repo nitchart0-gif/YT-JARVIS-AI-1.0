@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx src/services/productionProfileService.test.ts && tsx src/services/workflowVerification.test.ts"
+    "test": "tsx src/services/productionProfileService.test.ts && tsx src/services/workflowVerification.test.ts && tsx src/services/quotaAndAuthVerification.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

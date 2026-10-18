@@ -28,6 +28,7 @@ import {
   Cpu,
   Activity,
   Terminal,
+  Lock,
 } from 'lucide-react';
 import { useProject } from '../../context/ProjectContext.tsx';
 import { DriveStatusCard } from '../DriveStatusCard.tsx';

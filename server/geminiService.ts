@@ -429,7 +429,7 @@ export async function generateVideoScript(params: {
   contentMode: string;
   durationSeconds: number;
   language: string;
-  apiKey: string;
+  apiKey?: string | null;
 }): Promise<GeneratedScriptResult> {
   const { sourceText, contentMode, durationSeconds, language, apiKey } = params;
 
@@ -501,6 +501,36 @@ ${sourceText.trim()}
 </source_material>
 
 Generate the voiceover script for each segment following the exact timestamps and segment numbers.`;
+
+  if (!apiKey || apiKey.trim().length === 0) {
+    const demoSegments: GeneratedSegment[] = segmentPlan.map((s, idx) => {
+      let voiceover = '';
+      if (s.type === 'HOOK') {
+        voiceover = `What if everything you thought you knew about this story was completely overturned? Here is the documented breakdown.`;
+      } else if (s.type === 'ENDING') {
+        voiceover = `The evidence speaks for itself. The question is: what comes next? Follow J.A.R.V.I.S. for the complete investigation.`;
+      } else {
+        voiceover = `Examining key phase ${idx}: the recorded data reveals precise operations and strategic implications that redefined the entire sector.`;
+      }
+      return {
+        segmentNumber: s.segmentNumber,
+        type: s.typeLabel,
+        timestamp: s.timestamp,
+        voiceover,
+        estimatedDurationSeconds: s.targetSeconds,
+        wordCount: voiceover.trim().split(/\s+/).length,
+      };
+    });
+    return {
+      contentMode,
+      durationSeconds,
+      language,
+      totalSegments: demoSegments.length,
+      estimatedTotalSeconds: demoSegments.reduce((acc, curr) => acc + curr.estimatedDurationSeconds, 0),
+      segments: demoSegments,
+      model: 'Offline Demo Engine',
+    };
+  }
 
   const ai = new GoogleGenAI({
     apiKey: apiKey.trim(),
@@ -597,7 +627,7 @@ export interface TopicScriptParams {
   durationSeconds: number;
   language: string;
   hookStyle?: string;
-  apiKey: string;
+  apiKey?: string | null;
 }
 
 export interface GeneratedTopicScriptResult extends GeneratedScriptResult {
@@ -660,6 +690,38 @@ ${targetAudience ? `Tailor the explanation specifically for: ${targetAudience.tr
 
 Generate exactly ${segmentPlan.length} segments adhering strictly to the duration timestamps.
 Also include a punchy, high-CTR YouTube video title in 'suggestedTitle'.`;
+
+  if (!apiKey || apiKey.trim().length === 0) {
+    const demoSegments: GeneratedSegment[] = segmentPlan.map((s, idx) => {
+      let voiceover = '';
+      if (s.type === 'HOOK') {
+        voiceover = `Here is the real truth behind ${topic.trim()} that most creators overlook.`;
+      } else if (s.type === 'ENDING') {
+        voiceover = `That is the complete strategic breakdown. What is your perspective on ${topic.trim()}?`;
+      } else {
+        voiceover = `Looking closely at element ${idx}: data indicates that mastering this step transforms overall video retention.`;
+      }
+      return {
+        segmentNumber: s.segmentNumber,
+        type: s.typeLabel,
+        timestamp: s.timestamp,
+        voiceover,
+        estimatedDurationSeconds: s.targetSeconds,
+        wordCount: voiceover.trim().split(/\s+/).length,
+      };
+    });
+    return {
+      topic: topic.trim(),
+      suggestedTitle: `${topic.trim()}: The Complete Breakdown`,
+      contentMode,
+      durationSeconds,
+      language,
+      totalSegments: demoSegments.length,
+      estimatedTotalSeconds: demoSegments.reduce((acc, curr) => acc + curr.estimatedDurationSeconds, 0),
+      segments: demoSegments,
+      model: 'Offline Demo Engine',
+    };
+  }
 
   const ai = new GoogleGenAI({
     apiKey: apiKey.trim(),

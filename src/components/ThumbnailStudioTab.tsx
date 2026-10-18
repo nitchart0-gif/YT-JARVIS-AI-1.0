@@ -41,6 +41,8 @@ import {
   subscribeSources,
 } from '../services/sourceRepository.ts';
 import { useProject } from '../context/ProjectContext.tsx';
+import { quotaManager } from '../services/quotaManager.ts';
+import { QuotaRecoveryBanner } from './common/QuotaRecoveryBanner.tsx';
 
 // Built-in 4K-grade photorealistic documentary assets generated for the studio
 const PRESET_ASSETS = [
@@ -149,6 +151,16 @@ export const ThumbnailStudioTab: React.FC<ThumbnailStudioTabProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
+
+  // Real Imagen AI Image Generation States
+  const [isGeneratingRealImage, setIsGeneratingRealImage] = useState<boolean>(false);
+  const [realImageStatus, setRealImageStatus] = useState<{
+    success: boolean;
+    message: string;
+    isBillingRequired?: boolean;
+    imageUrl?: string;
+  } | null>(null);
+  const [savedAiAssets, setSavedAiAssets] = useState<Array<{ id: string; url: string; prompt: string; conceptName: string }>>([]);
 
   // Thumbnail Studio Package
   const [thumbPackage, setThumbPackage] = useState<ThumbnailStudioPackage | null>(null);
@@ -305,8 +317,16 @@ export const ThumbnailStudioTab: React.FC<ThumbnailStudioTabProps> = ({
         applyConceptToStudio(result.concepts[0], 0);
       }
       showToast('Generated 5 Cinematic Thumbnail Concepts!');
+      quotaManager.clearPendingTask();
+      quotaManager.resetToNormal();
     } catch (err: any) {
       console.error('Failed to generate thumbnail package:', err);
+      quotaManager.handleError(err, {
+        type: 'thumbnails',
+        label: `Thumbnail Package: ${customTitle || 'Visual Concept'}`,
+        payload: { sourceTitle: customTitle, scriptText: customText },
+        timestamp: Date.now(),
+      });
       setErrorMessage(err.message || 'Failed to generate thumbnail studio package.');
     } finally {
       setLoading(false);
@@ -343,10 +363,75 @@ export const ThumbnailStudioTab: React.FC<ThumbnailStudioTabProps> = ({
         applyConceptToStudio(res.concept, selectedConceptIndex);
       }
       showToast(`Refreshed Concept #${conceptNumber}!`);
+      quotaManager.clearPendingTask();
+      quotaManager.resetToNormal();
     } catch (err: any) {
       console.error('Failed to regenerate concept:', err);
+      quotaManager.handleError(err, {
+        type: 'thumbnails',
+        label: `Thumbnail Concept #${conceptNumber}`,
+        payload: { conceptNumber },
+        timestamp: Date.now(),
+      });
     } finally {
       setRegeneratingConceptId(null);
+    }
+  };
+
+  // Real Imagen AI Image Generation: Truthfully queries Google GenAI Imagen model
+  const handleGenerateRealImage = async () => {
+    if (!activeConcept) return;
+    setIsGeneratingRealImage(true);
+    setRealImageStatus(null);
+    try {
+      const res = await api.generateThumbnailImage({
+        userId,
+        prompt: activeConcept.imagePromptImagen,
+        aspectRatio: isPortraitThumb ? '9:16' : '16:9',
+      });
+
+      if (res.success && res.imageUrl) {
+        setSelectedImageSrc(res.imageUrl);
+        setSelectedAssetKey('ai-generated-imagen');
+        setSavedAiAssets((prev) => [
+          {
+            id: `img_${Date.now()}`,
+            url: res.imageUrl!,
+            prompt: activeConcept.imagePromptImagen,
+            conceptName: activeConcept.conceptName,
+          },
+          ...prev,
+        ]);
+        setRealImageStatus({
+          success: true,
+          message: 'Real AI thumbnail image successfully generated with Google Imagen 3 and mounted to Canvas!',
+          imageUrl: res.imageUrl,
+        });
+        showToast('Real AI image generated and mounted to Canvas!');
+        quotaManager.clearPendingTask();
+        quotaManager.resetToNormal();
+      } else {
+        setRealImageStatus({
+          success: false,
+          message: res.error || 'Failed to render AI image.',
+          isBillingRequired: res.isBillingRequired,
+        });
+      }
+    } catch (err: any) {
+      quotaManager.handleError(err, {
+        type: 'thumbnails',
+        label: `Imagen 3: ${activeConcept.conceptName}`,
+        payload: { prompt: activeConcept.imagePromptImagen },
+        timestamp: Date.now(),
+      });
+      const isBilling = err?.code === 'IMAGE_BILLING_REQUIRED' || err?.message?.toLowerCase().includes('billing');
+      setRealImageStatus({
+        success: false,
+        message: err?.message || 'Failed to render AI image with Google Imagen.',
+        isBillingRequired: isBilling,
+      });
+    } finally {
+      setIsGeneratingRealImage(false);
     }
   };
 
@@ -689,6 +774,12 @@ export const ThumbnailStudioTab: React.FC<ThumbnailStudioTabProps> = ({
           )}
         </div>
       </section>
+
+      {/* Real-time Quota Awareness & Automatic Recovery Banner */}
+      <QuotaRecoveryBanner
+        onRetry={() => handleGeneratePackage()}
+        isGenerating={loading}
+      />
 
       {/* Error Banner */}
       {errorMessage && (
@@ -1571,23 +1662,111 @@ export const ThumbnailStudioTab: React.FC<ThumbnailStudioTabProps> = ({
               </p>
             </div>
 
-            {/* Google Imagen 3 Prompt Box */}
-            <div className="p-4 rounded-xl border space-y-2.5" style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-subtle)' }}>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-emerald-400">Google Imagen 3 / Veo Prompt</span>
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(activeConcept.imagePromptImagen, 'imagen_prompt')}
-                  className="px-2.5 py-1 rounded-lg border text-[11px] font-semibold flex items-center space-x-1 cursor-pointer"
-                  style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
-                >
-                  {copiedKey === 'imagen_prompt' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                  <span>Copy</span>
-                </button>
+            {/* Google Imagen 3 Prompt & Real AI Generation Box */}
+            <div className="p-4 rounded-xl border space-y-3" style={{ backgroundColor: 'var(--bg-base)', borderColor: 'var(--border-subtle)' }}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs font-bold text-emerald-400">Google Imagen 3 / Veo Prompt</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                    4K Prompt
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(activeConcept.imagePromptImagen, 'imagen_prompt')}
+                    className="px-2.5 py-1 rounded-lg border text-[11px] font-semibold flex items-center space-x-1 cursor-pointer"
+                    style={{ borderColor: 'var(--border-subtle)', color: 'var(--text-secondary)' }}
+                  >
+                    {copiedKey === 'imagen_prompt' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    <span>Copy Prompt</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGenerateRealImage}
+                    disabled={isGeneratingRealImage}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-black flex items-center space-x-1.5 transition-all transform hover:scale-[1.02] cursor-pointer disabled:opacity-50 jarvis-gold-btn"
+                  >
+                    <Sparkles className={`w-3.5 h-3.5 text-black ${isGeneratingRealImage ? 'animate-spin' : ''}`} />
+                    <span>{isGeneratingRealImage ? 'Rendering Image...' : 'Render with Imagen 3'}</span>
+                  </button>
+                </div>
               </div>
+
               <p className="text-xs font-mono leading-relaxed select-all" style={{ color: 'var(--text-primary)' }}>
                 {activeConcept.imagePromptImagen}
               </p>
+
+              {/* Truthful Real AI Generation Progress & Feedback */}
+              {isGeneratingRealImage && (
+                <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs flex items-center space-x-2.5 animate-pulse">
+                  <RefreshCw className="w-4 h-4 animate-spin text-amber-400 flex-shrink-0" />
+                  <span>Submitting prompt to Google Imagen 3 ({isPortraitThumb ? '9:16' : '16:9'}). Verifying model authorization and rendering real JPEG asset...</span>
+                </div>
+              )}
+
+              {realImageStatus && (
+                <div
+                  className={`p-3 rounded-lg border text-xs space-y-1.5 ${
+                    realImageStatus.success
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                      : 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2 font-semibold">
+                    {realImageStatus.success ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                    )}
+                    <span>
+                      {realImageStatus.success
+                        ? 'Real AI Image Rendered & Mounted to Canvas'
+                        : realImageStatus.isBillingRequired
+                        ? 'Google Cloud Billing Required for Image Generation'
+                        : 'Image Generation Unavailable'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-zinc-300 leading-relaxed">
+                    {realImageStatus.message}
+                  </p>
+                  {!realImageStatus.success && (
+                    <div className="pt-1 flex items-center space-x-2 text-[10px] text-zinc-400">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                      <span>
+                        Note: Free-tier Gemini keys cover 100% of text, script, SEO, and prompt synthesis. Use the Studio Canvas with our 4K documentary presets or custom upload for 0 cost.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Saved AI Generated Assets History */}
+              {savedAiAssets.length > 0 && (
+                <div className="pt-2 border-t border-zinc-800 space-y-1.5">
+                  <span className="text-[11px] font-semibold text-zinc-400 block">Rendered AI Assets ({savedAiAssets.length}):</span>
+                  <div className="flex items-center space-x-2 overflow-x-auto pb-1">
+                    {savedAiAssets.map((asset) => (
+                      <button
+                        key={asset.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedImageSrc(asset.url);
+                          setSelectedAssetKey(asset.id);
+                          showToast(`Mounted ${asset.conceptName} AI image to Canvas!`);
+                        }}
+                        className="group relative flex-shrink-0 w-24 h-14 rounded-lg overflow-hidden border border-zinc-700 hover:border-amber-400 transition-all cursor-pointer"
+                        title={asset.conceptName}
+                      >
+                        <img src={asset.url} alt={asset.conceptName} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 group-hover:bg-transparent transition-colors flex items-center justify-center">
+                          <span className="text-[9px] font-bold text-white bg-black/70 px-1 py-0.5 rounded">Mount</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

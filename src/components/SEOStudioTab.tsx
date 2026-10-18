@@ -45,6 +45,8 @@ import {
   subscribeSources,
 } from '../services/sourceRepository.ts';
 import { useProject } from '../context/ProjectContext.tsx';
+import { quotaManager } from '../services/quotaManager.ts';
+import { QuotaRecoveryBanner } from './common/QuotaRecoveryBanner.tsx';
 
 interface SEOStudioTabProps {
   userId: string;
@@ -271,7 +273,15 @@ export const SEOStudioTab: React.FC<SEOStudioTabProps> = ({
       if (result.checklist) setChecklistState(result.checklist);
       setSuccessMessage('Complete YouTube SEO package generated successfully!');
       setTimeout(() => setSuccessMessage(null), 3000);
+      quotaManager.clearPendingTask();
+      quotaManager.resetToNormal();
     } catch (err: any) {
+      quotaManager.handleError(err, {
+        type: 'seo',
+        label: `YouTube SEO: ${titleToUse}`,
+        payload: { sourceTitle: titleToUse, scriptText: textToUse },
+        timestamp: Date.now(),
+      });
       setErrorMessage(err?.message || 'Failed to generate YouTube SEO package.');
     } finally {
       setLoading(false);
@@ -320,7 +330,15 @@ export const SEOStudioTab: React.FC<SEOStudioTabProps> = ({
 
       setSuccessMessage(`Regenerated ${sectionKey} section! Other sections preserved.`);
       setTimeout(() => setSuccessMessage(null), 2500);
+      quotaManager.clearPendingTask();
+      quotaManager.resetToNormal();
     } catch (err: any) {
+      quotaManager.handleError(err, {
+        type: 'seo',
+        label: `Regenerate SEO Section: ${sectionKey}`,
+        payload: { sectionKey },
+        timestamp: Date.now(),
+      });
       setErrorMessage(`Failed to regenerate ${sectionKey}: ${err?.message || 'Unknown error'}`);
     } finally {
       setRegeneratingSection(null);
@@ -653,6 +671,12 @@ Generated via YouTube SEO Studio`;
           </button>
         </div>
       </div>
+
+      {/* Real-time Quota Awareness & Automatic Recovery Banner */}
+      <QuotaRecoveryBanner
+        onRetry={() => handleGenerateFullPackage()}
+        isGenerating={loading}
+      />
 
       {/* 2. Error / Success Alerts */}
       {errorMessage && (
