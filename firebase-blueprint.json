@@ -1,0 +1,61 @@
+{
+  "entities": {
+    "SourceItem": {
+      "title": "SourceItem",
+      "description": "User research and story source material",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string", "maxLength": 300 },
+        "text": { "type": "string", "maxLength": 100000 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "title", "text"]
+    },
+    "EditorProject": {
+      "title": "EditorProject",
+      "description": "User multi-track timeline video editor project",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string", "maxLength": 200 },
+        "duration": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "name"]
+    },
+    "SEOPackage": {
+      "title": "SEOPackage",
+      "description": "YouTube SEO metadata package",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "sourceTitle": { "type": "string", "maxLength": 300 },
+        "videoFormat": { "type": "string", "enum": ["shorts", "standard"] },
+        "primaryKeyword": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "sourceTitle"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/sources/{sourceId}": {
+      "schema": "SourceItem",
+      "description": "User research source articles"
+    },
+    "/users/{userId}/editorProjects/{projectId}": {
+      "schema": "EditorProject",
+      "description": "User video editor projects"
+    },
+    "/users/{userId}/seoPackages/{packageId}": {
+      "schema": "SEOPackage",
+      "description": "User generated SEO packages"
+    }
+  }
+}

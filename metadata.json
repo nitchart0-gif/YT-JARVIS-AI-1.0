@@ -1,0 +1,6 @@
+{
+  "name": "YT-AI",
+  "description": "All-in-one AI YouTube Production Studio: Script Generator, Google Flow Video Prompts, SEO Studio, Thumbnail Studio, and Multi-track Timeline Video Editor.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
